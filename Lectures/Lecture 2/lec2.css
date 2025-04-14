@@ -1,0 +1,22 @@
+/* Slightly reduce overall font size */
+.reveal {
+  font-size: 2em;
+}
+
+/* Adjust heading sizes for better scaling */
+.reveal h1 {
+  font-size: 1.8em;
+}
+
+.reveal h2 {
+  font-size: 1.4em;
+}
+
+.reveal h3 {
+  font-size: 1.2em;
+}
+
+/* Make code blocks fit better */
+.reveal pre code {
+  font-size: 0.8em;
+}
