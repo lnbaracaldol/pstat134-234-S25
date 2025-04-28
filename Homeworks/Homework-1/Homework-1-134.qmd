@@ -1,8 +1,8 @@
 ---
 title: "PSTAT 134 - Data Wrangling, Web Scraping & APIs"
 format:
-  html:
-    toc: true
+  pdf:
+    toc: false
     code-fold: true
 ---
 
