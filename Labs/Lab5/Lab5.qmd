@@ -1,0 +1,226 @@
+---
+title: "Lab 5"
+format: html
+editor: visual
+execute:
+  echo: true
+  eval: true
+  freeze: auto
+jupyter: false
+---
+
+In this lab, you’ll build and evaluate a simple fully‑connected neural network on the Fashion‑MNIST dataset, then explore two classic regularization strategies: $L_2$ weight decay and Dropout to combat overfitting.
+
+## Dataset Description
+
+The **Fashion‑MNIST** dataset is a drop‑in replacement for the original MNIST (handwritten digits) dataset, but contains 70,000 grayscale images of Zalando’s article images:
+
+-   **Total images**: 70,000 (60,000 training, 10,000 test)
+-   **Image size**: 28×28 pixels
+-   **Color**: Grayscale (single channel)
+-   **Classes**: 10 categories (T‑shirt/top, Trouser, Pullover, Dress, Coat, Sandal, Shirt, Sneaker, Bag, Ankle boot)
+-   **Source**: Provided by Zalando Research, publicly available via [GitHub](https://github.com/zalandoresearch/fashion-mnist) and built into Keras/TensorFlow
+
+Each class is balanced with exactly 6,000 images in the training set and 1,000 in the test set, making it ideal for benchmarking new models.
+
+## Load Data & Inspect Examples
+
+```{python}
+import tensorflow as tf
+from keras import layers, models
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+## Let's Load The data
+(fx_train, fy_train), (fx_test, fy_test) = tf.keras.datasets.fashion_mnist.load_data()
+
+## Assign class names
+y = fy_train.flatten()
+
+label_map = {
+    0: "T‑shirt/top", 1: "Trouser",     2: "Pullover",
+    3: "Dress",       4: "Coat",        5: "Sandal",
+    6: "Shirt",       7: "Sneaker",     8: "Bag",
+    9: "Ankle boot"
+}
+
+#### Assigning true labels
+df = pd.DataFrame({'label': y})
+df['class_name']  = df['label'].map(label_map)
+
+indices = [5, 20, 789, 4567]  #indices of examples to plot
+fig, axes = plt.subplots(1, len(indices), figsize=(10, 4))
+fig.suptitle("Examples of Fashion‑MNIST Images")
+for ax, idx in zip(axes, indices):
+    ax.imshow(fx_train[idx], cmap='binary')
+
+plt.tight_layout()
+plt.show()
+```
+
+Now we print the annotated true labels:
+
+```{python}
+print(df.class_name[indices])
+
+```
+
+Let's see if the classes are balanced:
+
+```{python}
+### Explore Classes distribution
+summary = (
+    df['label']
+      .value_counts(sort=False)
+      .rename_axis('label')
+      .reset_index(name='count')
+)
+summary['percent']     = 100 * summary['count'] / summary['count'].sum()
+summary['class_name']  = summary['label'].map(label_map)
+
+# Reorder and drop count
+summary = summary[['label', 'class_name', 'percent']]
+print(summary)
+```
+
+Now we preprocess the data and build the Neural Network architecture:
+
+```{python}
+#### Rehsape images into vectors
+x_train = fx_train.reshape(-1, 28*28) / 255.0
+x_test  = fx_test.reshape(-1, 28*28)  / 255.0
+
+###Build model
+model = models.Sequential([
+    layers.Input(shape=(28*28,)),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(64, activation='relu'),
+    layers.Dense(10, activation='softmax')])
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+```
+
+In this next step we actually train our feed‐forward network on the Fashion‑MNIST training data and simultaneously hold out 20% of it for validation. Here’s what happens:
+
+```{python}
+###Training the model
+history = model.fit(
+    x_train, fy_train,
+    validation_split=0.2, ##20% for validation 
+    epochs=30,
+    batch_size=256
+)
+```
+
+We can plot the training vs.validation loss curves with:
+
+```{python}
+####Plot training Loss and validation loss over epochs
+plt.figure()  
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
+plt.show()
+```
+
+This visualization lets us see how quickly the model is learning (the downward slope of the training loss), and how the validation loss eventually starts rising (a classic sign of over‑fitting once the network has learned too much noise).
+
+## Fixing Overfitting
+
+### L2 Weight Regularization
+
+Penalize large weights by adding an $l_2$ penalty to the loss:
+
+```{python}
+from keras.regularizers import l2
+model_l2 = models.Sequential([
+    layers.Input(shape=(28*28,)),
+    layers.Dense(128, activation='relu',
+                 kernel_regularizer=l2(1e-3)), ## Penalty coefficient lambda = 1e-3
+    layers.Dense(64, activation='relu',
+                 kernel_regularizer=l2(1e-3)),
+    layers.Dense(10, activation='softmax')
+])
+
+model_l2.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+history = model_l2.fit(
+    x_train, fy_train,
+    validation_split=0.2, ##20% for validation 
+    epochs=30,
+    batch_size=256
+)
+
+plt.figure()  
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
+plt.show()
+```
+
+### Dropout
+
+Randomly “drop” a fraction of neurons each update so the network can’t rely on any one feature:
+
+```{python}
+model_do = models.Sequential([
+    layers.Input(shape=(28*28,)),
+    layers.Dense(128, activation='relu'),
+    layers.Dropout(0.5),              #drop 50% of activations
+    layers.Dense(64, activation='relu'),
+    layers.Dropout(0.3),              #drop 30% activations
+    layers.Dense(10, activation='softmax')
+])
+
+model_do.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+history = model_do.fit(
+    x_train, fy_train,
+    validation_split=0.2, ##20% for validation 
+    epochs=30,
+    batch_size=256
+)
+
+plt.figure()  
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
+plt.show()
+
+```
+
+## Final Evaluation
+
+Evaluate your all three models on the held‑out test set:
+
+```{python}
+for name, m in [('Baseline', model),
+                ('L2',       model_l2),
+                ('Dropout',  model_do)]:
+    loss, acc = m.evaluate(x_test, fy_test, verbose=0)
+    print(f"{name} Test Accuracy: {acc:.4f}")
+
+```
+
+------------------------------------------------------------------------
+
+## Extensions & Questions
+
+1.  **Combine** both $L_2$ penalty and Dropout in a single model. Does it outperform either alone?\
+2.  **Hyperparameter tuning:**
+    -   Sweep $\lambda \in \{10^{-1},10^{-2},10^{-3}\}$ for $L_2$
+    -   Vary Dropout $rates \in \{0.2, 0.5, 0.7\}$\
+    -   Try different batch sizes (64, 128, 256) and optimizers (SGD, Adam, RMSprop)\
+    -   Increase the number of epochs
+3.  **Model depth:** Increase or decrease the number of hidden layers/units. How does capacity affect overfitting?
+4.  **Visualize misclassifications:** Plot some examples the model got wrong—what patterns do you observe?
